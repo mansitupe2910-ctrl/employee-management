@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WorkTrack | Employee Management System</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f8fafc; color: #0f172a; line-height: 1.5; }
+    
+    /* Navbar */
+    .navbar {
+      background: #0f172a;
+      color: white;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .brand { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.5px; }
+    .brand span { color: #38bdf8; }
+    .user-picker { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+    .user-picker select {
+      background: #1e293b;
+      color: white;
+      border: 1px solid #334155;
+      padding: 6px 12px;
+      border-radius: 6px;
+      outline: none;
+      font-size: 0.9rem;
+    }
+
+    /* Layout */
+    .container {
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .card h2 { font-size: 1.15rem; margin-bottom: 0.75rem; color: #1e293b; }
+    .date-label { font-size: 0.85rem; color: #64748b; margin-bottom: 1rem; }
+
+    /* Buttons */
+    .btn-group { display: flex; gap: 10px; }
+    .btn {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.9rem;
+      transition: filter 0.2s;
+    }
+    .btn:hover { filter: brightness(0.92); }
+    .btn-green { background: #10b981; color: white; }
+    .btn-red { background: #ef4444; color: white; }
+    .btn-blue { background: #2563eb; color: white; }
+
+    /* Attendance Box */
+    .status-banner {
+      margin-top: 1rem;
+      padding: 0.75rem 1rem;
+      border-radius: 6px;
+      background: #f1f5f9;
+      border-left: 4px solid #3b82f6;
+      font-size: 0.95rem;
+    }
+
+    /* Forms */
+    .task-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .task-form textarea { grid-column: span 2; }
+    .task-form button { grid-column: span 2; }
+
+    input, textarea, select {
+      padding: 9px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 0.95rem;
+      outline: none;
+    }
+    input:focus, textarea:focus { border-color: #3b82f6; }
+
+    /* Tasks */
+    .task-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      margin-top: 8px;
+      background: #fafafa;
+    }
+    .task-item.Completed {
+      opacity: 0.5;
+      text-decoration: line-through;
+    }
+    .task-meta { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+  <header class="navbar">
+    <div class="brand">WorkTrack <span>EMS</span></div>
+    <div class="user-picker">
+      <label for="employeeSelect">Logged in as:</label>
+      <select id="employeeSelect"></select>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- Attendance Section -->
+    <section class="card">
+      <h2>Daily Attendance</h2>
+      <p id="todayDate" class="date-label"></p>
+      <div class="btn-group">
+        <button id="btnCheckIn" class="btn btn-green">Punch In</button>
+        <button id="btnCheckOut" class="btn btn-red">Punch Out</button>
+      </div>
+      <div id="attendanceStatus" class="status-banner">Checking attendance status...</div>
+    </section>
+
+    <!-- Task Assignment Form -->
+    <section class="card">
+      <h2>Assign New Task</h2>
+      <form id="taskForm" class="task-form">
+        <input type="text" id="taskTitle" placeholder="Task Title" required>
+        <input type="date" id="taskDeadline" required>
+        <textarea id="taskDesc" placeholder="Task details / description (optional)" rows="2"></textarea>
+        <button type="submit" class="btn btn-blue">Add Task</button>
+      </form>
+    </section>
+
+    <!-- Task List -->
+    <section class="card">
+      <h2>Assigned Tasks</h2>
+      <div id="taskList"></div>
+    </section>
+  </main>
+
+  <script>
+    // Relative API URL - eliminates CORS completely
+    const API = '/api';
+    let currentEmployeeId = null;
+
+    document.getElementById('todayDate').innerText = 'Today: ' + new Date().toLocaleDateString('en-GB', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    // 1. Load Employees
+    async function loadEmployees() {
+      try {
+        const res = await fetch(`${API}/employees`);
+        const employees = await res.json();
+        const select = document.getElementById('employeeSelect');
+        select.innerHTML = '';
+
+        employees.forEach(emp => {
+          const opt = document.createElement('option');
+          opt.value = emp.id;
+          opt.textContent = `${emp.name} (${emp.role})`;
+          select.appendChild(opt);
+        });
+
+        if (employees.length > 0) {
+          currentEmployeeId = employees[0].id;
+          refreshDashboard();
+        }
+
+        select.addEventListener('change', (e) => {
+          currentEmployeeId = e.target.value;
+          refreshDashboard();
+        });
+      } catch (err) {
+        document.getElementById('attendanceStatus').innerText = 'Error connecting to database. Is backend running?';
+      }
+    }
+
+    function refreshDashboard() {
+      loadAttendance();
+      loadTasks();
+    }
+
+    // 2. Punch In
+    document.getElementById('btnCheckIn').addEventListener('click', async () => {
+      const res = await fetch(`${API}/attendance/check-in`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: currentEmployeeId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        loadAttendance();
+      } else {
+        alert(data.error);
+      }
+    });
+
+    // 3. Punch Out
+    document.getElementById('btnCheckOut').addEventListener('click', async () => {
+      const res = await fetch(`${API}/attendance/check-out`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: currentEmployeeId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(data.message);
+        loadAttendance();
+      } else {
+        alert(data.error);
+      }
+    });
+
+    // 4. Load Today's Attendance
+    async function loadAttendance() {
+      const box = document.getElementById('attendanceStatus');
+      try {
+        const res = await fetch(`${API}/attendance/${currentEmployeeId}`);
+        const records = await res.json();
+        const today = new Date().toISOString().split('T')[0];
+        const record = records.find(r => r.date.split('T')[0] === today);
+
+        if (record) {
+          box.innerHTML = `<strong>Status:</strong> ${record.status} | <strong>Punch In:</strong> ${record.check_in} | <strong>Punch Out:</strong> ${record.check_out || 'Active (On Shift)'}`;
+        } else {
+          box.innerText = 'No punch record found for today.';
+        }
+      } catch (err) {
+        box.innerText = 'Could not load attendance.';
+      }
+    }
+
+    // 5. Load Tasks
+    async function loadTasks() {
+      const list = document.getElementById('taskList');
+      list.innerHTML = 'Loading tasks...';
+      try {
+        const res = await fetch(`${API}/tasks?employee_id=${currentEmployeeId}`);
+        const tasks = await res.json();
+        list.innerHTML = '';
+
+        if (tasks.length === 0) {
+          list.innerHTML = '<p style="color: #64748b; margin-top: 8px;">No tasks assigned yet.</p>';
+          return;
+        }
+
+        tasks.forEach(t => {
+          const div = document.createElement('div');
+          div.className = `task-item ${t.status}`;
+          div.innerHTML = `
+            <div>
+              <strong>${t.title}</strong>
+              <div class="task-meta">Due: ${t.deadline ? t.deadline.split('T')[0] : 'No deadline'} | ${t.description || ''}</div>
+            </div>
+            <div>
+              <select onchange="updateTaskStatus(${t.id}, this.value)">
+                <option value="Pending" ${t.status === 'Pending' ? 'selected' : ''}>Pending</option>
+                <option value="In Progress" ${t.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                <option value="Completed" ${t.status === 'Completed' ? 'selected' : ''}>Completed</option>
+              </select>
+            </div>
+          `;
+          list.appendChild(div);
+        });
+      } catch (err) {
+        list.innerHTML = '<p>Error loading tasks.</p>';
+      }
+    }
+
+    // 6. Update Task Status
+    window.updateTaskStatus = async function(id, status) {
+      await fetch(`${API}/tasks/${id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      loadTasks();
+    };
+
+    // 7. Add New Task
+    document.getElementById('taskForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = document.getElementById('taskTitle').value;
+      const deadline = document.getElementById('taskDeadline').value;
+      const description = document.getElementById('taskDesc').value;
+
+      const res = await fetch(`${API}/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: currentEmployeeId, title, deadline, description })
+      });
+
+      if (res.ok) {
+        document.getElementById('taskTitle').value = '';
+        document.getElementById('taskDeadline').value = '';
+        document.getElementById('taskDesc').value = '';
+        loadTasks();
+      }
+    });
+
+    // Start
+    loadEmployees();
+  </script>
+</body>
+</html>
