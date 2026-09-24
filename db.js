@@ -7,10 +7,13 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'test',
   port: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 3306,
-  ssl: process.env.DB_HOST && process.env.DB_HOST !== 'localhost' ? { minVersion: 'TLSv1.2', rejectUnauthorized: true } : false,
+  ssl: process.env.DB_HOST && process.env.DB_HOST !== 'localhost' 
+    ? { minVersion: 'TLSv1.2', rejectUnauthorized: false } 
+    : false,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  connectTimeout: 20000
 });
 
 module.exports = pool.promise();
